@@ -12,3 +12,6 @@ dependencies = [
     "textual-dev>=1.8.0",
     "tomli-w>=1.2.0",
 ]
+
+[tool.setuptools.packages.find]
+include = ["research*"]
