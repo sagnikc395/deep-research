@@ -31,3 +31,4 @@ using open-source models.
 ## references
 
 - [Anthropic - How we built our multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system)
+- [autoresearch](https://github.com/karpathy/autoresearch)
