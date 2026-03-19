@@ -1,8 +1,9 @@
 from dotenv import load_dotenv
+load_dotenv()
+
 from textual.app import App, ComposeResult
 from textual.containers import Vertical, Horizontal
 from textual.widgets import Header, Footer, Input, RichLog, Static
-from textual.worker import Worker, WorkerState
 from research.coordinator import run_deep_research
 
 
@@ -47,7 +48,10 @@ class DeepResearchApp(App):
         yield Static("deep-research v0.1", id="banner")
         yield RichLog(highlight=True, markup=True, id="log")
         yield Horizontal(
-            Input(placeholder="Enter your research query and press Enter...", id="query-input"),
+            Input(
+                placeholder="Enter your research query and press Enter...",
+                id="query-input",
+            ),
             id="query-bar",
         )
         yield Footer()
@@ -74,9 +78,6 @@ class DeepResearchApp(App):
     def _log(self, message: str) -> None:
         self.call_from_thread(self.log_widget.write, message)
 
-    @WorkerState.handler(WorkerState.SUCCESS)
-    def _on_worker_success(self, worker: Worker) -> None:
-        pass
 
     def _run_research(self, query: str) -> None:
         self.run_worker(self._do_research(query), name="research", thread=True)
@@ -104,7 +105,6 @@ class DeepResearchApp(App):
 
 
 def main():
-    load_dotenv()
     app = DeepResearchApp()
     app.run()
 
