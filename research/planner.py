@@ -1,16 +1,8 @@
-from pathlib import Path
-
 from huggingface_hub import InferenceClient
 
 from config import model_id, model_provider
 import os
-
-
-PLANNER_SYSTEM_PROMPT = (
-    Path(__file__).resolve().parent.parent
-    / "prompts"
-    / "planner_system_instructions.md"
-).read_text()
+from .prompts import PLANNER_SYSTEM_PROMPT
 
 
 def generate_research_plan(query):

@@ -2,14 +2,10 @@ from huggingface_hub import InferenceClient
 from pydantic import BaseModel
 from typing import List
 from config import task_planner_model_id, task_planner_provider
-from pathlib import Path
+from .prompts import TASK_SPLITTER_SYSTEM_PROMPT
+
 import os
 import json
-
-
-TASK_SPLITTER_SYSTEM_PROMPT = (
-    Path(__file__).resolve().parent.parent / "prompts" / "task_splitter_instructions.md"
-).read_text()
 
 
 class Subtask(BaseModel):
