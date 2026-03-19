@@ -1,0 +1,4 @@
+[app]
+name= "deep-research"
+model_id = "moonshotai/Kimi-K2-Thinking"
+model_provider = "auto"
