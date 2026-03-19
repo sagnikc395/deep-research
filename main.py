@@ -1,10 +1,11 @@
 from dotenv import load_dotenv
-load_dotenv()
 
 from textual.app import App, ComposeResult
-from textual.containers import Vertical, Horizontal
+from textual.containers import Horizontal
 from textual.widgets import Header, Footer, Input, RichLog, Static
 from research.coordinator import run_deep_research
+
+load_dotenv()
 
 
 class DeepResearchApp(App):
@@ -45,7 +46,7 @@ class DeepResearchApp(App):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Static("deep-research v0.1", id="banner")
+        yield Static("research v0.1", id="banner")
         yield RichLog(highlight=True, markup=True, id="log")
         yield Horizontal(
             Input(
@@ -77,7 +78,6 @@ class DeepResearchApp(App):
 
     def _log(self, message: str) -> None:
         self.call_from_thread(self.log_widget.write, message)
-
 
     def _run_research(self, query: str) -> None:
         self.run_worker(self._do_research(query), name="research", thread=True)
