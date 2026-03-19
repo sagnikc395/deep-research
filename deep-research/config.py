@@ -12,3 +12,5 @@ with open("../deep-research-config.toml", "rb") as f:
 app_name = config["app"]["name"]
 model_id = config["app"]["model_id"]
 model_provider = config["app"]["model_provider"]
+task_planner_model_id = config["app"]["task_planner_model_id"]
+task_planner_provider = config["app"]["task_planner_provider"]
