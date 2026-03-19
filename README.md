@@ -21,7 +21,48 @@ using open-source models.
 
 ## setup and configuration
 
-[TODO]
+### prerequisites
+
+- Python >= 3.13
+- [uv](https://docs.astral.sh/uv/) (recommended package manager)
+- A [Hugging Face](https://huggingface.co/) account and API token
+- A [Firecrawl](https://www.firecrawl.dev/) API key
+
+### installation
+
+1. Clone the repository:
+
+```bash
+git clone https://github.com/<your-username>/deep-research.git
+cd deep-research
+```
+
+2. Install dependencies with uv:
+
+```bash
+uv sync
+```
+
+3. Copy the sample env file and fill in your keys:
+
+```bash
+cp .env.sample .env
+```
+
+Edit `.env` and set your credentials:
+
+```
+HF_TOKEN="your-huggingface-token"
+FIRECRAWL_API_KEY="your-firecrawl-api-key"
+```
+
+### running
+
+```bash
+uv run python main.py
+```
+
+This launches a TUI where you can type your research query. Results are saved to `results.md`.
 
 ## todo
 
