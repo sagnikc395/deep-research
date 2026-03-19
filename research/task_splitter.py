@@ -1,7 +1,6 @@
 from huggingface_hub import InferenceClient
 from pydantic import BaseModel
-from typing import List
-from config import task_planner_model_id, task_planner_provider
+from .config import task_planner_model_id, task_planner_provider
 from .prompts import TASK_SPLITTER_SYSTEM_PROMPT
 
 import os
@@ -15,7 +14,7 @@ class Subtask(BaseModel):
 
 
 class SubtaskList(BaseModel):
-    subtasks: List[Subtask]
+    subtasks: list[Subtask]
 
 
 TASK_SPLITTER_JSON_SCHEMA = {
@@ -25,11 +24,7 @@ TASK_SPLITTER_JSON_SCHEMA = {
 }
 
 
-def split_task_into_subtasks(research_plan: str) -> List[Subtask]:
-    print("Splitting the research plan into subtasks ...")
-    print(f"Using Model : {task_planner_model_id}")
-    print(f"Model Provider: {task_planner_provider}")
-
+def split_task_into_subtasks(research_plan: str) -> list[dict]:
     client = InferenceClient(
         api_key=os.environ["HF_TOKEN"],
         bill_to="huggingface",
@@ -45,16 +40,8 @@ def split_task_into_subtasks(research_plan: str) -> List[Subtask]:
         response_format={
             "type": "json_schema",
             "json_schema": TASK_SPLITTER_JSON_SCHEMA,
-        },  # type: ignore
-    )  # type: ignore
+        },
+    )
 
-    message = completion.choices[0].message
-
-    subtasks = json.loads(message.content)["subtasks"]
-
-    print("\033[93mGenerated The Following Subtasks\033[0m")
-    for task in subtasks:
-        print(f"\033[93m{task['title']}\033[0m")
-        print(f"\033[93m{task['description']}\033[0m")
-        print()
+    subtasks = json.loads(completion.choices[0].message.content)["subtasks"]
     return subtasks

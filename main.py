@@ -1,37 +1,112 @@
-from datetime import datetime
+from dotenv import load_dotenv
 from textual.app import App, ComposeResult
-from textual.widgets import Digits
+from textual.containers import Vertical, Horizontal
+from textual.widgets import Header, Footer, Input, RichLog, Static
+from textual.worker import Worker, WorkerState
 from research.coordinator import run_deep_research
 
 
-# class ClockApp(App):
-#     CSS = """
-#     Screen {align: center middle;}
-#     Digits {width: auto;}
-# """
+class DeepResearchApp(App):
+    CSS = """
+    Screen {
+        layout: vertical;
+    }
 
-#     def compose(self) -> ComposeResult:
-#         yield Digits("")
+    #banner {
+        height: 3;
+        content-align: center middle;
+        text-style: bold;
+        color: $accent;
+        background: $surface;
+    }
 
-#     def on_ready(self):
-#         self.update_clock()
-#         self.set_interval(1, self.update_clock)
+    #query-bar {
+        height: 3;
+        dock: bottom;
+        padding: 0 1;
+    }
 
-#     def update_clock(self):
-#         clock = datetime.now().time()
-#         self.query_one(Digits).update(f"{clock:%T}")
+    #query-input {
+        width: 1fr;
+    }
+
+    #log {
+        height: 1fr;
+        border: round $primary;
+        padding: 0 1;
+    }
+    """
+
+    BINDINGS = [
+        ("ctrl+q", "quit", "Quit"),
+        ("ctrl+c", "quit", "Quit"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=True)
+        yield Static("deep-research v0.1", id="banner")
+        yield RichLog(highlight=True, markup=True, id="log")
+        yield Horizontal(
+            Input(placeholder="Enter your research query and press Enter...", id="query-input"),
+            id="query-bar",
+        )
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one("#query-input", Input).focus()
+        self.log_widget = self.query_one("#log", RichLog)
+        self.log_widget.write("[bold]Welcome to deep-research![/bold]")
+        self.log_widget.write("Type your research query below and press Enter.\n")
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        query = event.value.strip()
+        if not query:
+            return
+
+        event.input.value = ""
+        event.input.disabled = True
+
+        self.log_widget.write(f"\n[bold cyan]Query:[/bold cyan] {query}")
+        self.log_widget.write("[dim]Starting research...[/dim]\n")
+
+        self._run_research(query)
+
+    def _log(self, message: str) -> None:
+        self.call_from_thread(self.log_widget.write, message)
+
+    @WorkerState.handler(WorkerState.SUCCESS)
+    def _on_worker_success(self, worker: Worker) -> None:
+        pass
+
+    def _run_research(self, query: str) -> None:
+        self.run_worker(self._do_research(query), name="research", thread=True)
+
+    async def _do_research(self, query: str) -> None:
+        try:
+            result = run_deep_research(query=query, log=self._log)
+
+            with open("results.md", "w") as f:
+                f.write(result)
+
+            self.call_from_thread(
+                self.log_widget.write,
+                "\n[bold green]Research complete! Saved to results.md[/bold green]",
+            )
+        except Exception as e:
+            self.call_from_thread(
+                self.log_widget.write,
+                f"\n[bold red]Error: {e}[/bold red]",
+            )
+        finally:
+            input_widget = self.query_one("#query-input", Input)
+            self.call_from_thread(setattr, input_widget, "disabled", False)
+            self.call_from_thread(input_widget.focus)
 
 
 def main():
-    print("Hello from deep-research!")
-    # app = ClockApp()
-    # app.run()
     load_dotenv()
-    query = input("Enter your research query:")
-    result = run_deep_research(query=query)
-    with open("results.md", "w") as f:
-        f.write(result)
-    print("Research result saved to research_result.md")
+    app = DeepResearchApp()
+    app.run()
 
 
 if __name__ == "__main__":
