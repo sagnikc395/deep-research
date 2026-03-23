@@ -68,6 +68,8 @@ This launches a TUI where you can type your research query. Results are saved to
 
 - [v0.2] add support for memory
 - [v0.2] using obscure cli to interact with obsidian to autonomously search for research topics
+- [v0.2] Add support for cost analysis for a generic run
+- [v0.2] Error detection for infinite loops or when tokens are being wasted
 
 ## references
 
