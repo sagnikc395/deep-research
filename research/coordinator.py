@@ -2,6 +2,7 @@ from .planner import generate_research_plan
 from .task_splitter import split_task_into_subtasks
 from .prompts import SUBAGENT_PROMPT_TEMPLATE, COORDINATOR_PROMPT_TEMPLATE
 from .config import MCP_URL, coordinator_model_id, subagent_model_id
+from .memory import save_session
 from smolagents import (
     InferenceClientModel,
     ToolCallingAgent,
