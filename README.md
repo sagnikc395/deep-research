@@ -1,4 +1,4 @@
-# research
+# deep-research
 
 an implementation of a multi-agent deep research system
 using open-source models.
