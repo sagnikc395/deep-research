@@ -44,9 +44,9 @@ A splitter Agno Agent decomposes the research map into **non-overlapping subtask
 
 ### 3. Research (`research/researcher.py`)
 
-One **researcher agent** is spawned per subtask. Each researcher is an Agno Agent with access to Firecrawl's MCP toolkit, so it can search, scrape, follow promising links, and return a structured Markdown mini-report through native tool calls.
+One **researcher agent** is spawned per subtask and all subtasks run in parallel. Each researcher is an Agno Agent with access to Firecrawl's MCP toolkit, so it can search, scrape, follow promising links, and return a structured Markdown mini-report through native tool calls.
 
-MCP requires an async transport (SSE / websocket). To stay compatible with the sync pipeline, each researcher runs in its own OS thread via `ThreadPoolExecutor` so that `asyncio.run()` always gets a clean event loop.
+MCP requires an async transport (SSE / websocket). Each researcher runs its async work inside its own OS thread via an inner `ThreadPoolExecutor(max_workers=1)` so that `asyncio.run()` always gets a clean event loop. The coordinator fans all researchers out concurrently via an outer `ThreadPoolExecutor(max_workers=N)`, collecting results with `as_completed` as each one finishes.
 
 ### 4. Synthesis (`research/coordinator.py`)
 
@@ -132,11 +132,12 @@ Supported provider values: `"novita"`, `"together"`, `"auto"` (HF default routin
 - **MCP is underrated as an integration pattern.** Firecrawl exposing search and scraping over MCP meant zero glue code between the agent framework and the web. Swap the agent framework tomorrow and the tools still work.
 - **Open-source models struggle most at synthesis.** Planning, splitting, searching, and extraction all work well. Weaving ten mini-reports into a cohesive narrative is where the gap with frontier models is most visible — it's the current bottleneck for output quality.
 - **Coordinator as plain Python.** The original design used an LLM-as-coordinator pattern where the coordinator would invoke sub-agents via a tool. The current design replaces that with a Python loop, which is simpler, deterministic, and easier to reason about. The LLM is now only used where it adds real value.
+- **Parallel fan-out is cheap to add but watch thread counts.** Each researcher gets its own OS thread; with many subtasks this can spike quickly. `max_workers=len(subtasks)` is fine for typical query splits (4–8 subtasks) but should be capped if the splitter ever produces a large list.
 
 ## Roadmap
 
 - [x] **Memory support** — persistent sessions so the agent can build on previous research
-- [ ] **Parallel researchers** — run subtask agents concurrently instead of sequentially
+- [x] **Parallel researchers** — run subtask agents concurrently instead of sequentially
 - [ ] **Obsidian integration** via [obscure](https://github.com/sagnikc395/obscure) — let the agent scan your vault for open questions and autonomously fill knowledge gaps
 - [ ] Cost tracking per run
 - [ ] Error detection for infinite loops and token waste
