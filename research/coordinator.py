@@ -3,6 +3,8 @@
 run_deep_research() is the single public entry point. It wires together
 the four pipeline stages and persists the session to memory.
 """
+import concurrent.futures
+
 from agno.agent import Agent
 
 from .config import coordinator_model_id, coordinator_provider
@@ -27,10 +29,21 @@ def run_deep_research(query: str, log=print) -> str:
     for t in subtasks:
         log(f"  [{t['id']}] {t['title']}")
 
-    # ── Stage 3: research each subtask ───────────────────────────────────
+    # ── Stage 3: research subtasks in parallel ───────────────────────────
+    # Each research_subtask already runs its async MCP work in its own
+    # OS thread, so spinning up one outer thread per subtask is safe and
+    # gives us true fan-out with no event-loop contention.
     reports: dict[str, str] = {}
-    for subtask in subtasks:
-        reports[subtask["id"]] = research_subtask(query, plan, subtask, log=log)
+    log(f"Starting {len(subtasks)} researchers in parallel...")
+
+    def _research_one(subtask: dict) -> tuple[str, str]:
+        return subtask["id"], research_subtask(query, plan, subtask, log=log)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(subtasks)) as pool:
+        futures = {pool.submit(_research_one, t): t for t in subtasks}
+        for future in concurrent.futures.as_completed(futures):
+            subtask_id, report = future.result()
+            reports[subtask_id] = report
 
     # ── Stage 4: synthesize ──────────────────────────────────────────────
     log("Synthesizing final report...")
