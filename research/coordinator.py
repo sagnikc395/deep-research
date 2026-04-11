@@ -14,17 +14,20 @@ from .planner import generate_research_plan
 from .prompts import SYNTHESIS_PROMPT_TEMPLATE
 from .researcher import research_subtask
 from .task_splitter import split_task_into_subtasks
+from .telemetry import PipelineMetrics
 
 
 def run_deep_research(query: str, log=print) -> str:
+    metrics = PipelineMetrics()
+
     # ── Stage 1: plan ────────────────────────────────────────────────────
     log("Generating research plan...")
-    plan = generate_research_plan(query)
+    plan = generate_research_plan(query, metrics=metrics, log=log)
     log("Research plan generated.")
 
     # ── Stage 2: split ───────────────────────────────────────────────────
     log("Splitting into subtasks...")
-    subtasks = split_task_into_subtasks(plan)
+    subtasks = split_task_into_subtasks(plan, metrics=metrics, log=log)
     log(f"Generated {len(subtasks)} subtasks.")
     for t in subtasks:
         log(f"  [{t['id']}] {t['title']}")
@@ -37,7 +40,9 @@ def run_deep_research(query: str, log=print) -> str:
     log(f"Starting {len(subtasks)} researchers in parallel...")
 
     def _research_one(subtask: dict) -> tuple[str, str]:
-        return subtask["id"], research_subtask(query, plan, subtask, log=log)
+        return subtask["id"], research_subtask(
+            query, plan, subtask, log=log, metrics=metrics
+        )
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(subtasks)) as pool:
         futures = {pool.submit(_research_one, t): t for t in subtasks}
@@ -60,8 +65,10 @@ def run_deep_research(query: str, log=print) -> str:
         name="synthesizer",
         markdown=True,
     )
-    final_report = synthesizer.run(synthesis_prompt).content
+    synthesis_response = synthesizer.run(synthesis_prompt)
+    metrics.record("synthesizer", synthesis_response.metrics, log)
 
-    save_session(query, plan, subtasks, final_report)
+    save_session(query, plan, subtasks, synthesis_response.content)
     log("Research complete.")
-    return final_report
+    metrics.report(log)
+    return synthesis_response.content

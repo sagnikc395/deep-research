@@ -48,6 +48,8 @@ One **researcher agent** is spawned per subtask and all subtasks run in parallel
 
 MCP requires an async transport (SSE / websocket). Each researcher runs its async work inside its own OS thread via an inner `ThreadPoolExecutor(max_workers=1)` so that `asyncio.run()` always gets a clean event loop. The coordinator fans all researchers out concurrently via an outer `ThreadPoolExecutor(max_workers=N)`, collecting results with `as_completed` as each one finishes.
 
+Each researcher agent is created with `tool_call_limit=20` (configurable in `telemetry.py`) to prevent runaway tool loops. After each run, the tool execution log is scanned for repeated identical calls — a warning is emitted if the same `(tool, args)` pair appears three or more times.
+
 ### 4. Synthesis (`research/coordinator.py`)
 
 Once every researcher reports back, a synthesizer Agno Agent weaves the mini-reports into a single coherent Markdown document — reorganizing information, resolving contradictions, and producing something that reads like a real report rather than a concatenation of summaries. The final output is saved to `results.md`.
@@ -64,6 +66,7 @@ deep-research/
 │   ├── planner.py                   # Stage 1: research map
 │   ├── task_splitter.py             # Stage 2: subtask decomposition
 │   ├── researcher.py                # Stage 3: per-subtask research agent
+│   ├── telemetry.py                 # Token-usage tracking and loop detection
 │   ├── prompts.py                   # Prompt template loader
 │   ├── config.py                    # Config loader (MCP URL, model ids)
 │   └── memory.py                    # Persistent session memory (SQLite)
@@ -125,6 +128,40 @@ subagent_provider      = "novita"
 
 Supported provider values: `"novita"`, `"together"`, `"auto"` (HF default routing).
 
+## Telemetry
+
+`research/telemetry.py` handles two runtime concerns without touching the core pipeline logic:
+
+**Token-waste detection**
+
+`PipelineMetrics` is a thread-safe accumulator passed through every stage. After each `agent.run()` call the stage records its `RunOutput.metrics` (Agno's built-in token counters). Two warnings are emitted automatically:
+
+- **Per-stage** — if a single agent run exceeds 30,000 tokens, a `[token-warn]` line is logged immediately.
+- **Pipeline-wide** — if the total across all stages exceeds 150,000 tokens, a warning is emitted at the end.
+
+A formatted summary table is printed after synthesis completes:
+
+```
+── token usage ─────────────────────────────────────────────────
+  planner                           in=   1,200  out=     800  total=   2,000
+  task_splitter                     in=   2,100  out=     400  total=   2,500
+  researcher[1]                     in=   8,400  out=   4,200  total=  12,600
+  ...
+  TOTAL                             in=  32,000  out=  18,000  total=  50,000
+────────────────────────────────────────────────────────────────
+```
+
+Thresholds are constants at the top of `telemetry.py` and can be adjusted without touching any stage code.
+
+**Infinite-loop detection**
+
+Two layers work together:
+
+1. `tool_call_limit=20` is set on every researcher `Agent`. Agno enforces this hard cap internally — the run stops once the limit is reached regardless of what the model wants to do next.
+2. `check_tool_loop()` performs a post-run scan of the `ToolExecution` list. If the same `(tool_name, serialised_args)` pair appears three or more times, a `[loop-warn]` line is logged with the tool name, call count, and the first 120 characters of the repeated args.
+
+Both thresholds (`RESEARCHER_TOOL_CALL_LIMIT`, `REPEATED_CALL_THRESHOLD`) live in `telemetry.py`.
+
 ## Design notes
 
 - **The splitter determines everything.** More time went into tuning the splitting step than any other part of the system. Overlapping subtasks cause redundancy; too-broad ones produce shallow summaries; too-narrow ones miss the bigger picture. Granularity is the main quality lever.
@@ -138,9 +175,10 @@ Supported provider values: `"novita"`, `"together"`, `"auto"` (HF default routin
 
 - [x] **Memory support** — persistent sessions so the agent can build on previous research
 - [x] **Parallel researchers** — run subtask agents concurrently instead of sequentially
+- [x] **Token-waste detection** — per-stage and pipeline-wide token usage tracking with configurable warn thresholds
+- [x] **Infinite-loop detection** — hard `tool_call_limit` per researcher plus post-run repeated-call scanning
 - [ ] **Obsidian integration** via [obscure](https://github.com/sagnikc395/obscure) — let the agent scan your vault for open questions and autonomously fill knowledge gaps
-- [ ] Cost tracking per run
-- [ ] Error detection for infinite loops and token waste
+- [ ] Cost tracking per run (requires provider pricing table)
 
 ## References
 
