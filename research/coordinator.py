@@ -1,102 +1,54 @@
-from .planner import generate_research_plan
-from .task_splitter import split_task_into_subtasks
-from .prompts import SUBAGENT_PROMPT_TEMPLATE, COORDINATOR_PROMPT_TEMPLATE
-from .config import MCP_URL, coordinator_model_id, subagent_model_id
+"""Pipeline orchestrator: plan → split → research → synthesize.
+
+run_deep_research() is the single public entry point. It wires together
+the four pipeline stages and persists the session to memory.
+"""
+from agno.agent import Agent
+
+from .config import coordinator_model_id, coordinator_provider
 from .memory import save_session
-from smolagents import (
-    InferenceClientModel,
-    ToolCallingAgent,
-    MCPClient,
-    tool,
-)
-import os
-import json
+from .models import hf_model
+from .planner import generate_research_plan
+from .prompts import SYNTHESIS_PROMPT_TEMPLATE
+from .researcher import research_subtask
+from .task_splitter import split_task_into_subtasks
 
 
 def run_deep_research(query: str, log=print) -> str:
-    log("Running deep-research...")
-
+    # ── Stage 1: plan ────────────────────────────────────────────────────
     log("Generating research plan...")
-    research_plan = generate_research_plan(query)
+    plan = generate_research_plan(query)
     log("Research plan generated.")
 
+    # ── Stage 2: split ───────────────────────────────────────────────────
     log("Splitting into subtasks...")
-    subtasks = split_task_into_subtasks(research_plan)
+    subtasks = split_task_into_subtasks(plan)
     log(f"Generated {len(subtasks)} subtasks.")
-
     for t in subtasks:
         log(f"  [{t['id']}] {t['title']}")
 
-    log(f"Coordinator Model: {coordinator_model_id}")
-    log(f"Subagent Model: {subagent_model_id}")
+    # ── Stage 3: research each subtask ───────────────────────────────────
+    reports: dict[str, str] = {}
+    for subtask in subtasks:
+        reports[subtask["id"]] = research_subtask(query, plan, subtask, log=log)
 
-    coordinator_model = InferenceClientModel(
-        model_id=coordinator_model_id,
-        api_key=os.environ["HF_TOKEN"],
-        provider="novita",
-        bill_to="huggingface",
+    # ── Stage 4: synthesize ──────────────────────────────────────────────
+    log("Synthesizing final report...")
+    sub_reports = "\n\n---\n\n".join(
+        f"## {t['title']}\n\n{reports[t['id']]}" for t in subtasks
     )
-    subagent_model = InferenceClientModel(
-        model_id=subagent_model_id,
-        api_key=os.environ["HF_TOKEN"],
-        provider="novita",
-        bill_to="huggingface",
+    synthesis_prompt = SYNTHESIS_PROMPT_TEMPLATE.format(
+        user_query=query,
+        research_plan=plan,
+        sub_reports=sub_reports,
     )
+    synthesizer = Agent(
+        model=hf_model(coordinator_model_id, coordinator_provider),
+        name="synthesizer",
+        markdown=True,
+    )
+    final_report = synthesizer.run(synthesis_prompt).content
 
-    with MCPClient({"url": MCP_URL, "transport": "streamable-http"}) as mcp_tools:
-
-        @tool
-        def initialize_subagent(
-            subtask_id: str, subtask_title: str, subtask_description: str
-        ) -> str:
-            """
-            Spawn a dedicated research sub-agent for a single subtask.
-
-            Args:
-                subtask_id: The unique identifier for the subtask.
-                subtask_title: The descriptive title of the subtask.
-                subtask_description: Detailed instructions for the sub-agent.
-
-            The sub-agent has access to the Firecrawl MCP tools and returns
-            a structured markdown report for the given subtask.
-            """
-            log(f"Starting subagent for [{subtask_id}] {subtask_title}...")
-
-            subagent = ToolCallingAgent(
-                tools=mcp_tools,
-                model=subagent_model,
-                add_base_tools=False,
-                name=f"subagent_{subtask_id}",
-            )
-
-            prompt = SUBAGENT_PROMPT_TEMPLATE.format(
-                user_query=query,
-                research_plan=research_plan,
-                subtask_id=subtask_id,
-                subtask_title=subtask_title,
-                subtask_description=subtask_description,
-            )
-
-            result = subagent.run(prompt)
-            log(f"Subagent [{subtask_id}] finished.")
-            return result
-
-        coordinator = ToolCallingAgent(
-            tools=[initialize_subagent],
-            model=coordinator_model,
-            add_base_tools=False,
-            name="coordinator_agent",
-        )
-
-        subtasks_json = json.dumps(subtasks, indent=2, ensure_ascii=False)
-
-        coordinator_prompt = COORDINATOR_PROMPT_TEMPLATE.format(
-            user_query=query,
-            research_plan=research_plan,
-            subtasks_json=subtasks_json,
-        )
-
-        log("Coordinator running...")
-        final_report = coordinator.run(coordinator_prompt)
-        log("Research complete.")
-        return final_report
+    save_session(query, plan, subtasks, final_report)
+    log("Research complete.")
+    return final_report

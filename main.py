@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.widgets import Header, Footer, Input, RichLog, Static
+
 from research.coordinator import run_deep_research
 
 load_dotenv()
@@ -46,7 +47,7 @@ class DeepResearchApp(App):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Static("research v0.1", id="banner")
+        yield Static("research v0.2", id="banner")
         yield RichLog(highlight=True, markup=True, id="log")
         yield Horizontal(
             Input(
@@ -74,15 +75,13 @@ class DeepResearchApp(App):
         self.log_widget.write(f"\n[bold cyan]Query:[/bold cyan] {query}")
         self.log_widget.write("[dim]Starting research...[/dim]\n")
 
-        self._run_research(query)
+        self.run_worker(lambda: self._do_research(query), name="research", thread=True)
 
     def _log(self, message: str) -> None:
         self.call_from_thread(self.log_widget.write, message)
 
-    def _run_research(self, query: str) -> None:
-        self.run_worker(self._do_research(query), name="research", thread=True)
-
-    async def _do_research(self, query: str) -> None:
+    def _do_research(self, query: str) -> None:
+        """Sync worker — runs in a plain OS thread (no event loop)."""
         try:
             result = run_deep_research(query=query, log=self._log)
 
