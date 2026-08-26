@@ -1,5 +1,8 @@
 # deep_research
 
+## ARCHIVAL NOTICE
+due to my focus being much more on [kai](https://github.com/sagnikc395/kai) to make it as general purpose coding harness as possible with all the bells and whistles of this repo.
+
 A multi-agent deep research system built on open-source models. Give it a question; it plans the investigation, fans out parallel web-research agents, and produces a single polished Markdown report.
 
 Like OpenAI's Deep Research or Perplexity, but local, inspectable, and running entirely on open-source inference.
